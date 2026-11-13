@@ -1,166 +1,106 @@
-# FewShotProtoNet
-Progetto di Machine Learning su Few-Shot learning con il metodo di meta learning Prototypical Network.
+# Few-Shot Learning with Prototypical Networks
 
-## Setting
-Impostare nei successivi moduli .py su quale GPU si vuole lavorare
-```python
-os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"     #0 o 1 se si dispone di due GPU
+A PyTorch coursework implementation of episodic few-shot classification.
+Experiments compare convolutional and residual backbones, one-shot/five-shot
+settings, data augmentation, and character-domain transfer.
+
+## Experiment scope
+
+- CUB bird classification with Conv4, Conv6, ResNet10, ResNet18, and ResNet34.
+- Omniglot classification and Omniglot-to-EMNIST transfer.
+- Five-way episodes with configurable support examples.
+- Feature-based evaluation and an optional adaptation comparison.
+
+Results and the original discussion are included in
+[RelazioneEdoardoReML.pdf](RelazioneEdoardoReML.pdf) and
+[PresentazioneEdoardoReML.pptx](PresentazioneEdoardoReML.pptx).
+Historical reported accuracies are not new measurements of this fork.
+
+## Runtime and data
+
+Use a compatible Python 3 environment with PyTorch, torchvision, NumPy, Pillow,
+h5py, and Matplotlib. The source uses CUDA directly; the training and evaluation
+entry points are **not CPU-ready without modification**.
+No pinned dependency manifest is included.
+
+`train.py`, `save_features.py`, and `test.py` each set
+`CUDA_VISIBLE_DEVICES = "1"` internally. Change those source settings to select
+your available GPU; setting only the shell environment is overwritten.
+
+Dataset directories are defined in [configs.py](configs.py):
+
+```text
+datasets/CUB/
+datasets/omniglot/
+datasets/emnist/
 ```
 
-## train.py
-Eseguire il modulo train.py per addestrare e condurre un nuovo esperimento, le successive variabili possono essere modificate per eseguire training in scenari differenti
-```python
-    # .Conv4, .Conv6, .ResNet10, .ResNet18, .ResNet34
-    model = 'Conv6'
+Split JSON files contain `label_names`, `image_names`, and `image_labels`.
+Ensure their image paths resolve on your machine: split metadata is not a
+substitute for the image datasets. Use the datasets under their applicable terms.
 
-    # CUB, omniglot, cross_char
-    dataset = 'CUB'
+## Training and evaluation workflow
 
-    # class num to classify for training
-    train_n_way = 5
+1. Prepare the datasets and check the paths in `configs.py` and their JSON splits.
+2. Configure the dataset, backbone, ways, shots, augmentation, and GPU in
+   `train.py`. These are source variables, not CLI flags.
+3. Run training from the repository root:
 
-    # class num to classify for testing (validation)
-    test_n_way = 5
+   ```sh
+   python train.py
+   ```
 
-    # number of labeled data in each class, same as n_support
-    n_shot = 1
+4. Match the same dataset, backbone, ways, shots, augmentation, and GPU settings
+   in `save_features.py`, then extract features:
 
-    # perform data augmentation or not during training
-    train_aug = True
+   ```sh
+   python save_features.py
+   ```
 
-    # Save frequency
-    save_freq = 50
+5. Prepare features for every configuration evaluated by `test.py`, then run:
 
-    # Starting epoch
-    start_epoch = 0
+   ```sh
+   python test.py
+   ```
 
-    # Stopping epoch
-    stop_epoch = -1
+Training saves `best_model.tar` and periodic checkpoints below `checkpoints/`.
+Feature extraction writes HDF5 files under the matching `features/` hierarchy.
+The full evaluation script expects a matrix of experiments, not just the
+checkpoint from one default training run. Align or restrict its experiment
+calls when reproducing only a subset.
 
-    # continue from previous trained model with largest epoch
-    resume = False
-```
-A termine dell'esecuzione si avrà nella directory checkpoints il miglior modello best_model.tar (non presenti nella repo a causa delle grandi dimensioni).
+The current training defaults use CUB, Conv6, five-way one-shot episodes, and
+augmentation. Automatic epoch selection uses 600 epochs for one-shot and 400
+for five-shot training; this is not a quick smoke test.
 
-## save_features.py
-Regolando le variabili in modo analogo a quanto visto prima in fase di training è necessario estrarre le features dal modello in .tar in un file .hdf5 presente a fine esecuzione nella directory features
+## Repository guide
 
-## test.py
-Dopo aver addestrato i modelli per CUB nelle configurazioni (1S , 5S)x(NoAugmentation, Augmentation)x(Conv4, Conv6, ResNet10, ResNet18, ResNet34).
-Quelli per Omniglot con 1Shot, 5Shot sempre con Conv4, Omniglot->EMNIST con 1Shot, 5Shot sempre con Conv4.
-Infine CUB ResNet18 5W-5S NoAdaptation e CUB ResNet18 5W-5S Adaptation, risulta possibile eseguire il file test.py che mostra in output le seguenti tabelle e grafici riportati in relazione.
+| Path | Purpose |
+| --- | --- |
+| [backbone.py](backbone.py) | Convolutional and residual feature extractors |
+| [protonet.py](protonet.py) | Prototype-based classification and episode loops |
+| [data](data) | Image transformations, episode sampling, and feature loading |
+| [train.py](train.py) | Training and checkpoint selection |
+| [save_features.py](save_features.py) | Checkpoint-to-HDF5 feature extraction |
+| [test.py](test.py) | Repeated episode evaluation, tables, and plots |
 
+Checkpoints are not comprehensively included because of their size.
+Load only trusted model files. Historical Python/PyTorch API assumptions may
+need adaptation on current runtimes.
 
-### Esempio di output del file ```test.py```
-```
-ssh://er******@m***.d****.u***.**:*****/u*/b*/python3 -u /home/er******/test.py
-Test omniglot, Conv4, n_shot = 1
-600 Test Acc = 97.92% +- 0.28%
-Test omniglot, Conv4, n_shot = 5
-600 Test Acc = 99.37% +- 0.12%
-Test cross_char, Conv4, n_shot = 1
-600 Test Acc = 73.29% +- 0.78%
-Test cross_char, Conv4, n_shot = 5
-600 Test Acc = 86.95% +- 0.58%
---------------------------------------------------------------------
-Omni 5W-1S     Omni 5W-5S     Omni->Emnist 5W-1S  Omni->Emnist 5W-5S
---------------------------------------------------------------------
-97.92 +- 0.28  99.37 +- 0.12    73.29 +- 0.78       86.95 +- 0.58
---------------------------------------------------------------------
-Test without augmentiation, Conv4, n_shot = 1
-600 Test Acc = 52.16% +- 0.92%
-Test without augmentiation, Conv6, n_shot = 1
-600 Test Acc = 53.20% +- 0.95%
-Test without augmentiation, ResNet10, n_shot = 1
-600 Test Acc = 59.97% +- 0.93%
-Test without augmentiation, ResNet18, n_shot = 1
-600 Test Acc = 61.52% +- 0.97%
-Test without augmentiation, ResNet34, n_shot = 1
-600 Test Acc = 59.69% +- 0.98%
-Test without augmentiation, Conv4, n_shot = 5
-600 Test Acc = 67.39% +- 0.72%
-Test without augmentiation, Conv6, n_shot = 5
-600 Test Acc = 67.71% +- 0.74%
-Test without augmentiation, ResNet10, n_shot = 5
-600 Test Acc = 72.46% +- 0.73%
-Test without augmentiation, ResNet18, n_shot = 5
-600 Test Acc = 73.66% +- 0.69%
-Test without augmentiation, ResNet34, n_shot = 5
-600 Test Acc = 74.43% +- 0.72%
-Test with augmentiation, Conv4, n_shot = 1
-600 Test Acc = 50.86% +- 0.92%
-Test with augmentiation, Conv6, n_shot = 1
-600 Test Acc = 65.67% +- 1.01%
-Test with augmentiation, ResNet10, n_shot = 1
-600 Test Acc = 73.16% +- 0.87%
-Test with augmentiation, ResNet18, n_shot = 1
-600 Test Acc = 74.18% +- 0.90%
-Test with augmentiation, ResNet34, n_shot = 1
-600 Test Acc = 74.56% +- 0.92%
-Test with augmentiation, Conv4, n_shot = 5
-600 Test Acc = 76.37% +- 0.69%
-Test with augmentiation, Conv6, n_shot = 5
-600 Test Acc = 81.74% +- 0.61%
-Test with augmentiation, ResNet10, n_shot = 5
-600 Test Acc = 85.83% +- 0.49%
-Test with augmentiation, ResNet18, n_shot = 5
-600 Test Acc = 86.51% +- 0.51%
-Test with augmentiation, ResNet34, n_shot = 5
-600 Test Acc = 87.91% +- 0.46%
-------------------------------------------------------------------------------------------
-Backbone:        Conv4          Conv6          ResNet10       ResNet18       ResNet34     
-------------------------------------------------------------------------------------------
-CUB 5W-1S NoAug  52.16 +- 0.92  53.2 +- 0.95   59.97 +- 0.93  61.52 +- 0.97  59.69 +- 0.98
-CUB 5W-5S NoAug  67.39 +- 0.72  67.71 +- 0.74  72.46 +- 0.73  73.66 +- 0.69  74.43 +- 0.72
-CUB 5W-1S Aug    50.86 +- 0.92  65.67 +- 1.01  73.16 +- 0.87  74.18 +- 0.9   74.56 +- 0.92
-CUB 5W-5S Aug    76.37 +- 0.69  81.74 +- 0.61  85.83 +- 0.49  86.77 +- 0.49   87.91 +- 0.46
-------------------------------------------------------------------------------------------
-Test CUB, ResNet18, n_shot = 5, adaptation = False
-600 Test Acc = 86.77% +- 0.49%
-Test CUB, ResNet18, n_shot = 5, adaptation = True
-600 Test Acc = 86.51% +- 0.50%
---------------------------------------------------------------
-CUB ResNet18 5W-5S NoAdaptation  CUB ResNet18 5W-5S Adaptation
---------------------------------------------------------------
-     86.77 +- 0.49                     86.51 +- 0.5 
---------------------------------------------------------------
+## References and attribution
 
-Process finished with exit code 0
+The original README credits **Edoardo Re, 2021**, and identifies these sources:
 
-```
+- [CUB-200-2011](https://www.vision.caltech.edu/datasets/cub_200_2011/),
+  [Omniglot](https://github.com/brendenlake/omniglot), and
+  [EMNIST data used by the original project](https://github.com/NanqingD/DAOSL).
+- [Data/backbone reference](https://github.com/facebookresearch/low-shot-shrink-hallucinate).
+- [Prototypical Networks reference](https://github.com/jakesnell/prototypical-networks).
+- [Experiment structure reference](https://github.com/wyharveychen/CloserLookFewShot).
 
-## Librerie utilizzate
-```python
-import numpy as np
-import torch
-import torch.optim
-import glob
-import os
-import torch.utils.data.sampler
-import random
-from matplotlib import pyplot as plt
-from matplotlib.ticker import PercentFormatter
-import torch.nn as nn
-from torch.autograd import Variable
-import torch.nn.functional
-from PIL import ImageEnhance
-import torchvision.transforms as transforms
-import json
-import h5py
-```
+This repository is a fork of
+[edoardore/FewShotProtoNet](https://github.com/edoardore/FewShotProtoNet).
+Original credit, component licenses, and history are preserved.
 
-## Riferimenti
-Tutti i datasets di questo progetto sono stati presi da [CUB-200-2011](http://www.vision.caltech.edu/visipedia-data/CUB-200-2011/CUB_200_2011.tgz), [Omniglot](https://github.com/brendenlake/omniglot/blob/master/python/images_background.zip?raw=true),[Omniglot2](https://github.com/brendenlake/omniglot/blob/master/python/images_evaluation.zip?raw=true), [EMNIST](https://github.com/NanqingD/DAOSL/raw/master/data/emnist.zip). A supporto delle immagini sono stati realizzati tre file json (base, val, novel) con i campi:
-```json
-{"label_names": ["class0","class1","..."], "image_names": ["filepath1","filepath2","..."],"image_labels":["l1","l2","l3","..."]}  
-```
-L'implementazione è stata ripresa e riadattata dalle seguenti repo: [Gestione data e backbone](https://github.com/facebookresearch/low-shot-shrink-hallucinate), [ProtoNet e gestione Omniglot](https://github.com/jakesnell/prototypical-networks), [Struttura e setup](https://github.com/wyharveychen/CloserLookFewShot)
-
-## Contributing
-Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
-Please make sure to update tests as appropriate.
-
-
-## License
-[Edoardo Re](https://github.com/edoardore), 2021
+Discuss substantial changes in an issue and include appropriate tests.
